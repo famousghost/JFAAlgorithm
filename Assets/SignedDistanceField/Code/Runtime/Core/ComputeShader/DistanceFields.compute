@@ -1,0 +1,76 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel FillTexture
+#pragma kernel DistanceField
+#pragma kernel VoronoiDiagram
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+Texture2D<float4> _EarthTexture;
+RWTexture2D<float4> _EarthTextureResult;
+RWTexture2D<float4> _VoronoiTexture;
+
+float2 _TextureResolution;
+
+float _Offset;
+
+[numthreads(8,8,1)]
+void FillTexture(uint3 id : SV_DispatchThreadID)
+{
+    float4 val = _EarthTexture[id.xy];
+    if(val.x != 0.0f)
+    {
+        _EarthTextureResult[id.xy] = _EarthTexture[id.xy];
+    }
+    else
+    {
+        _EarthTextureResult[id.xy] = 0.0f;
+    }
+}
+
+[numthreads(8, 8, 1)]
+void DistanceField(uint3 id : SV_DispatchThreadID)
+{
+    float4 center = _EarthTexture[id.xy];
+
+    float2 uvs[8];
+
+    uvs[0] = (id.xy + float2(-1.0f, 1.0f) * _Offset);
+    uvs[1] = (id.xy + float2(0.0f, 1.0f) * _Offset);
+    uvs[2] = (id.xy + float2(1.0f, 1.0f) * _Offset);
+    uvs[3] = (id.xy + float2(-1.0f, 0.0f) * _Offset);
+    uvs[4] = (id.xy + float2(1.0f, 0.0f) * _Offset);
+    uvs[5] = (id.xy + float2(-1.0f, -1.0f) * _Offset);
+    uvs[6] = (id.xy + float2(0.0f, -1.0f) * _Offset);
+    uvs[7] = (id.xy + float2(1.0f, -1.0f) * _Offset);
+
+    float minDist = 100000.0f;
+    float2 minCoord = center.xy;
+    for (int i = 0; i < 8; ++i)
+    {
+        float4 pixel = _EarthTexture[uvs[i]];
+        float pixelDist = distance(pixel.xy, id.xy);
+        if (pixel.x == center.y && pixel.y == center.y)
+        {
+            continue;
+        }
+
+        if(pixel.x != 0.0f && pixel.y != 0.0f && pixelDist < minDist)
+        {
+            minDist = pixelDist;
+            minCoord = pixel.xy;
+        }
+    }
+
+    _EarthTextureResult[id.xy] = float4(minCoord, 0.0f, 0.0f);
+}
+
+float random(in float2 p)
+{
+    return frac(sin(dot(p, float2(19.34234f, 33.34234f))) * 432123.42343f);
+}
+
+[numthreads(8, 8, 1)]
+void VoronoiDiagram(uint3 id : SV_DispatchThreadID)
+{
+    _VoronoiTexture[id.xy] = clamp(distance(id.xy / _TextureResolution, _EarthTextureResult[id.xy].xy / _TextureResolution), 0.0f, 1.0f);
+}
