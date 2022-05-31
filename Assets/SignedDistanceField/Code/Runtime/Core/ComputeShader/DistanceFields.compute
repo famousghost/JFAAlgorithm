@@ -1,4 +1,5 @@
 // Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel PrepareSeedTexture
 #pragma kernel FillTexture
 #pragma kernel DistanceField
 #pragma kernel VoronoiDiagram
@@ -13,18 +14,23 @@ float2 _TextureResolution;
 
 float _Offset;
 
-[numthreads(8,8,1)]
-void FillTexture(uint3 id : SV_DispatchThreadID)
+[numthreads(8, 8, 1)]
+void PrepareSeedTexture(uint3 id : SV_DispatchThreadID)
 {
-    float4 val = _EarthTexture[id.xy];
-    if(val.x != 0.0f)
+    if(_EarthTexture[id.xy].x > 0.0f)
     {
-        _EarthTextureResult[id.xy] = _EarthTexture[id.xy];
+        _EarthTextureResult[id.xy] = float4(id.xy, 0.0f, 0.0f);
     }
     else
     {
-        _EarthTextureResult[id.xy] = 0.0f;
+        _EarthTextureResult[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
+}
+
+[numthreads(8,8,1)]
+void FillTexture(uint3 id : SV_DispatchThreadID)
+{
+    _EarthTextureResult[id.xy] = _EarthTexture[id.xy];
 }
 
 [numthreads(8, 8, 1)]
@@ -47,6 +53,14 @@ void DistanceField(uint3 id : SV_DispatchThreadID)
     float2 minCoord = center.xy;
     for (int i = 0; i < 8; ++i)
     {
+        if (id.x < 0.0f || id.x > _TextureResolution.x)
+        {
+            continue;
+        }
+        if (id.y <= 0.0f || id.y > _TextureResolution.y)
+        {
+            continue;
+        }
         float4 pixel = _EarthTexture[uvs[i]];
         float pixelDist = distance(pixel.xy, id.xy);
         if (pixel.x == center.y && pixel.y == center.y)
@@ -69,8 +83,10 @@ float random(in float2 p)
     return frac(sin(dot(p, float2(19.34234f, 33.34234f))) * 432123.42343f);
 }
 
+float _Intensity;
+
 [numthreads(8, 8, 1)]
 void VoronoiDiagram(uint3 id : SV_DispatchThreadID)
 {
-    _VoronoiTexture[id.xy] = clamp(distance(id.xy / _TextureResolution, _EarthTextureResult[id.xy].xy / _TextureResolution), 0.0f, 1.0f);
+    _VoronoiTexture[id.xy] = min(distance(id.xy / _TextureResolution, _EarthTextureResult[id.xy].xy / _TextureResolution) * _Intensity, 1.0f);
 }

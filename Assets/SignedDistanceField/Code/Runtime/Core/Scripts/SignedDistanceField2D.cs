@@ -13,8 +13,10 @@ namespace McCore.SignedDistanceField
         [SerializeField] private ComputeShader _Shader;
         [SerializeField] private bool _DoIt = false;
         [SerializeField] private bool _DoIt2 = false;
+        [SerializeField] private bool _Reset = false;
 
         [SerializeField] private float _Offset = 4.0f;
+        [SerializeField] private float _Intensity = 1.0f;
         #endregion Inspector Variables
 
         #region Public Variables
@@ -43,42 +45,51 @@ namespace McCore.SignedDistanceField
             _SignedDistanceKernelId = _Shader.FindKernel("DistanceField");
             _FillTextureKernelId = _Shader.FindKernel("FillTexture");
             _VoronoiKernelId = _Shader.FindKernel("VoronoiDiagram");
+            _SeedTextureKernelId = _Shader.FindKernel("PrepareSeedTexture");
 
-            _Shader.SetTexture(_FillTextureKernelId, _EarthTextureId, _DefaultEarthTexture);
-            _Shader.SetTexture(_FillTextureKernelId, _EarthTetxureResultId, _EarthTexture);
-            _Shader.SetVector(_TextureResolutionID, _TextureSize);
+            _Shader.SetTexture(_SeedTextureKernelId, _EarthTextureId, _DefaultEarthTexture);
+            _Shader.SetTexture(_SeedTextureKernelId, _EarthTetxureResultId, _EarthTexture);
 
-            _Shader.Dispatch(_FillTextureKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
+            _Shader.Dispatch(_SeedTextureKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
 
+            _Offset = Mathf.Pow(2.0f, Mathf.Log(Mathf.Max(_TextureSize.x, _TextureSize.y), 2)-1);
         }
 
         private void Update()
         {
+            if (_Reset)
+            {
+                _Shader.SetTexture(_FillTextureKernelId, _EarthTextureId, _DefaultEarthTexture);
+                _Shader.SetTexture(_FillTextureKernelId, _EarthTetxureResultId, _EarthTexture);
+                _Shader.SetVector(_TextureResolutionID, _TextureSize);
+                _Reset = false;
+                _Shader.Dispatch(_FillTextureKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
+            }
 
             if (_Offset < 1.0f)
             {
                 return;
             }
-                _Shader.SetTexture(_SignedDistanceKernelId, _EarthTextureId, _EarthTexture);
-                _Shader.SetTexture(_SignedDistanceKernelId, _EarthTetxureResultId, _EarthTextureResult);
-                _Shader.SetFloat(_OffsetId, _Offset);
-                _Shader.SetVector(_TextureResolutionID, _TextureSize);
+            _Shader.SetTexture(_SignedDistanceKernelId, _EarthTextureId, _EarthTexture);
+            _Shader.SetTexture(_SignedDistanceKernelId, _EarthTetxureResultId, _EarthTextureResult);
+            _Shader.SetFloat(_OffsetId, _Offset);
+            _Shader.SetVector(_TextureResolutionID, _TextureSize);
 
-                _Shader.Dispatch(_SignedDistanceKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
+            _Shader.Dispatch(_SignedDistanceKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
 
-                _Shader.SetTexture(_FillTextureKernelId, _EarthTextureId, _EarthTextureResult);
-                _Shader.SetTexture(_FillTextureKernelId, _EarthTetxureResultId, _EarthTexture);
+            _Shader.SetTexture(_FillTextureKernelId, _EarthTextureId, _EarthTextureResult);
+            _Shader.SetTexture(_FillTextureKernelId, _EarthTetxureResultId, _EarthTexture);
 
-                _Shader.Dispatch(_FillTextureKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
+            _Shader.Dispatch(_FillTextureKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
 
-                _Offset /= 2.0f;
+            _Offset /= 2.0f;
 
-                _Shader.SetVector(_TextureResolutionID, _TextureSize);
-                _Shader.SetTexture(_VoronoiKernelId, _EarthTetxureResultId, _EarthTextureResult);
-                _Shader.SetTexture(_VoronoiKernelId, _VoronoiTextureId, _VoronoiTexture);
+            _Shader.SetVector(_TextureResolutionID, _TextureSize);
+            _Shader.SetTexture(_VoronoiKernelId, _EarthTetxureResultId, _EarthTextureResult);
+            _Shader.SetTexture(_VoronoiKernelId, _VoronoiTextureId, _VoronoiTexture);
+            _Shader.SetFloat(_IntensityId, _Intensity);
 
-                _Shader.Dispatch(_VoronoiKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
-
+            _Shader.Dispatch(_VoronoiKernelId, (int)_TextureSize.x / 8, (int)_TextureSize.y / 8, 1);
 
 
         }
@@ -90,8 +101,10 @@ namespace McCore.SignedDistanceField
         private static readonly int _TextureResolutionID = Shader.PropertyToID("_TextureResolution");
         private static readonly int _VoronoiTextureId = Shader.PropertyToID("_VoronoiTexture");
         private static readonly int _OffsetId = Shader.PropertyToID("_Offset");
+        private static readonly int _IntensityId = Shader.PropertyToID("_Intensity");
         private int _SignedDistanceKernelId;
         private int _FillTextureKernelId;
+        private int _SeedTextureKernelId;
         private int _VoronoiKernelId;
 
         #endregion Private Variables
